@@ -82,6 +82,16 @@ pub enum Request {
         env: Vec<String>,
     },
 
+    /// Start an auto login session for the given user. If autologin is not
+    /// allowed, this will fail. As with StartSession, this will fail if the
+    /// session has pending messages or has encountered an error.
+    AutoLoginSession {
+        username: String,
+        cmd: Vec<String>,
+        #[serde(default)]
+        env: Vec<String>,
+    },
+
     /// Cancel a session. This can only be done if the session has not been
     /// started. Cancel does not have to be called if an error has been
     /// encountered in its setup or login flow.
