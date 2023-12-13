@@ -86,6 +86,7 @@ async fn client_handler(ctx: &Context, mut s: UnixStream) -> Result<(), Error> {
                 }
             }
             Request::StartSession { cmd, env } => wrap_result(ctx.start(cmd, env).await),
+            Request::AutoLoginSession { username, cmd, env } => wrap_result(ctx.start_autologin_session(username, cmd, env).await),
             Request::CancelSession => wrap_result(ctx.cancel().await),
         };
 

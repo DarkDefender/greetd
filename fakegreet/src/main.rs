@@ -90,6 +90,14 @@ impl Context {
         Ok(())
     }
 
+    async fn start_autologin_session(&self, _username: String, _cmd: Vec<String>) -> Result<(), Error> {
+        if !self.inner.borrow().ok {
+            return Err(Error::Error("not yet dammit".to_string()));
+        }
+        sleep(Duration::from_millis(5000)).await;
+        Ok(())
+    }
+
     async fn start(&self, _cmd: Vec<String>) -> Result<(), Error> {
         if !self.inner.borrow().ok {
             return Err(Error::Error("not yet dammit".to_string()));
@@ -138,6 +146,7 @@ async fn client_handler(ctx: &Context, mut s: UnixStream) -> Result<(), Error> {
                 }
             }
             Request::StartSession { cmd, env: _ } => wrap_result(ctx.start(cmd).await),
+            Request::AutoLoginSession { username, cmd, env: _ } => wrap_result(ctx.start_autologin_session(username, cmd).await),
             Request::CancelSession => wrap_result(ctx.cancel().await),
         };
 

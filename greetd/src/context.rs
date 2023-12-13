@@ -174,6 +174,65 @@ impl Context {
         Ok(())
     }
 
+    /// TODO update comment
+    /// Directly start an initial session, bypassing the normal scheduling.
+    pub async fn start_autologin_session(&self, username: String, cmd: Vec<String>, env: Vec<String>) -> Result<(), Error> {
+        {
+            let inner = self.inner.read().await;
+            if inner.current.is_none() {
+                return Err("session not active".into());
+            }
+            if inner.configuring.is_some() {
+                return Err("a session is already being configured".into());
+            }
+            if inner.scheduled.is_some() {
+                return Err("a session is already scheduled".into());
+            }
+        }
+        let mut session_set = SessionSet {
+            session: Session::new_external()?,
+            time: Instant::now(),
+        };
+        session_set
+            .session
+                .initiate(
+                    &self.pam_service,
+                    SessionClass::User,
+                    &username,
+                    false,
+                    &self.term_mode,
+                    self.source_profile,
+                    &self.listener_path,
+            )
+            .await?;
+        loop {
+            match session_set.session.get_state().await {
+                Ok(SessionState::Ready) => break,
+                Ok(SessionState::Question(_, _)) => session_set.session.post_response(None).await?,
+                Err(err) => return Err(format!("session start failed: {}", err).into()),
+            }
+        }
+        // Send our arguments to the session.
+        session_set.session.send_args(cmd, env).await?;
+
+        let mut session_set_tmp = Some(session_set);
+        let mut inner = self.inner.write().await;
+        std::mem::swap(&mut session_set_tmp, &mut inner.scheduled);
+        drop(inner);
+
+        // If there was a scheduled session, cancel it.
+        if let Some(mut p) = session_set_tmp {
+            p.session.cancel().await?;
+        }
+
+        // We give the greeter 5 seconds to prove itself well-behaved before
+        // we lose patience and shoot it in the back repeatedly. This is all
+        // handled by our alarm handler.
+        alarm::set(5);
+
+        Ok(())
+    }
+
     /// Create a new session for configuration.
     pub async fn create_session(&self, username: String) -> Result<(), Error> {
         {
