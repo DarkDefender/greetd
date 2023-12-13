@@ -86,6 +86,7 @@ async fn client_handler(ctx: &Context, mut s: UnixStream) -> Result<(), Error> {
                 }
             }
             Request::StartSession { cmd, env } => wrap_result(ctx.start(cmd, env).await),
+            Request::AutoLoginSession { username, cmd, env } => wrap_result(ctx.start_autologin_session(username, cmd, env).await),
             Request::CancelSession => wrap_result(ctx.cancel().await),
         };
 
@@ -240,6 +241,7 @@ pub async fn main(config: Config) -> Result<(), Error> {
     let ctx = Rc::new(Context::new(
         config.file.default_session.command,
         config.file.default_session.user,
+        config.file.default_session.allow_autologin,
         greeter_service.to_string(),
         service.to_string(),
         term_mode.clone(),
@@ -248,9 +250,11 @@ pub async fn main(config: Config) -> Result<(), Error> {
         listener_path,
     ));
 
-    if let (Some(s), true) = (config.file.initial_session, ctx.is_first_run()) {
+    if let (Some(s), true) = (config.file.initial_session, ctx.is_first_login()) {
+        // Ensure we don't try to autologin again after the first attempt.
+        ctx.create_runfile();
         if let Err(e) = ctx.start_user_session(&s.user, vec![s.command]).await {
-            eprintln!("unable to start greeter: {}", e);
+            eprintln!("unable to start initial session: {}", e);
             reset_vt(&term_mode).map_err(|e| format!("unable to reset VT: {}", e))?;
 
             std::process::exit(1);
@@ -261,8 +265,6 @@ pub async fn main(config: Config) -> Result<(), Error> {
 
         std::process::exit(1);
     }
-
-    ctx.create_runfile();
 
     let mut alarm = signal(SignalKind::alarm()).expect("unable to listen for SIGALRM");
     let mut child = signal(SignalKind::child()).expect("unable to listen for SIGCHLD");

@@ -39,6 +39,7 @@ pub struct ConfigSession {
     pub command: String,
     pub user: String,
     pub service: String,
+    pub allow_autologin: bool,
 }
 
 #[derive(Debug, Eq, PartialEq, Default)]
@@ -138,10 +139,17 @@ fn parse_config(config_str: &str) -> Result<ConfigFile, Error> {
             let service = maybe_unquote(servicestr)
                 .map_err(|e| format!("unable to read default_session.service: {}", e))?;
 
+            let allow_autologin = section
+                .get("allow_autologin")
+                .unwrap_or(&"false")
+                .parse()
+                .map_err(|e| format!("unable to read initial_session.allow_autologin: {}", e))?;
+
             Ok(ConfigSession {
                 command,
                 user,
                 service,
+                allow_autologin,
             })
         }
         None => Err("no default_session specified"),
@@ -170,6 +178,7 @@ fn parse_config(config_str: &str) -> Result<ConfigFile, Error> {
                 command,
                 user,
                 service,
+                allow_autologin: false,
             })
         }
         None => None,
@@ -298,6 +307,7 @@ command = \"agreety\"
                     command: "agreety".to_string(),
                     user: "greeter".to_string(),
                     service: "greetd-greeter".to_string(),
+                    allow_autologin: false,
                 },
                 general: Default::default(),
                 initial_session: None,
@@ -327,12 +337,14 @@ user = \"john\"
                     command: "agreety".to_string(),
                     user: "greeter".to_string(),
                     service: "greetd-greeter".to_string(),
+                    allow_autologin: false,
                 },
                 general: Default::default(),
                 initial_session: Some(ConfigSession {
                     command: "sway".to_string(),
                     user: "john".to_string(),
                     service: "greetd".to_string(),
+                    allow_autologin: false,
                 }),
             }
         );
@@ -360,6 +372,7 @@ runfile = \"/path/to/greetd.state\"
                     command: "agreety".to_string(),
                     user: "greeter".to_string(),
                     service: "greetd-greeter".to_string(),
+                    allow_autologin: false,
                 },
                 general: ConfigGeneral {
                     source_profile: false,
@@ -404,6 +417,7 @@ vt = 1
                     command: "agreety".to_string(),
                     user: "greeter".to_string(),
                     service: "greetd-greeter".to_string(),
+                    allow_autologin: false,
                 },
                 general: Default::default(),
                 initial_session: None,
@@ -428,6 +442,7 @@ vt = next
                     command: "agreety".to_string(),
                     user: "greeter".to_string(),
                     service: "greetd-greeter".to_string(),
+                    allow_autologin: false,
                 },
                 general: Default::default(),
                 initial_session: None,
@@ -452,6 +467,7 @@ vt = current
                     command: "agreety".to_string(),
                     user: "greeter".to_string(),
                     service: "greetd-greeter".to_string(),
+                    allow_autologin: false,
                 },
                 general: Default::default(),
                 initial_session: None,
