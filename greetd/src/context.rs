@@ -41,6 +41,7 @@ pub struct Context {
     inner: RwLock<ContextInner>,
     greeter_bin: String,
     greeter_user: String,
+    greeter_allow_autologin: bool,
     greeter_service: String,
     pam_service: String,
     term_mode: TerminalMode,
@@ -53,6 +54,7 @@ impl Context {
     pub fn new(
         greeter_bin: String,
         greeter_user: String,
+        greeter_allow_autologin: bool,
         greeter_service: String,
         pam_service: String,
         term_mode: TerminalMode,
@@ -68,6 +70,7 @@ impl Context {
             }),
             greeter_bin,
             greeter_user,
+            greeter_allow_autologin,
             greeter_service,
             pam_service,
             term_mode,
@@ -143,7 +146,7 @@ impl Context {
     }
 
     /// Check if this is the first time greetd starts since boot, or if it restarted for any reason
-    pub fn is_first_run(&self) -> bool {
+    pub fn is_first_login(&self) -> bool {
         !Path::new(&self.runfile).exists()
     }
 
@@ -178,6 +181,14 @@ impl Context {
     /// Directly start an initial session, bypassing the normal scheduling.
     pub async fn start_autologin_session(&self, username: String, cmd: Vec<String>, env: Vec<String>) -> Result<(), Error> {
         {
+            if !self.greeter_allow_autologin {
+                return Err("autologin is disabled".into());
+            }
+
+            if !self.is_first_login() {
+                return Err("can't autologin if you have already logged in once".into());
+            }
+
             let inner = self.inner.read().await;
             if inner.current.is_none() {
                 return Err("session not active".into());
@@ -407,6 +418,9 @@ impl Context {
                         Some(mut scheduled) => {
                             // Our greeter finally bit the dust so we can
                             // start our scheduled session.
+
+                            // Create a runfile to signify that we have attempted to login once.
+                            self.create_runfile();
                             drop(inner);
                             let s = match scheduled.session.start().await {
                                 Ok(s) => s,

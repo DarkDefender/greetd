@@ -23,6 +23,7 @@ pub struct ConfigSession {
     pub command: String,
     pub user: String,
     pub service: String,
+    pub allow_autologin: bool,
 }
 
 #[derive(Debug, Eq, PartialEq, Default)]
@@ -110,6 +111,7 @@ fn parse_old_config(config: &HashMap<&str, HashMap<&str, &str>>) -> Result<Confi
             user: greeter_user,
             command: greeter,
             service: GREETER_SERVICE.to_string(),
+            allow_autologin: false,
         },
         general: Default::default(),
         initial_session: None,
@@ -157,10 +159,17 @@ fn parse_new_config(config: &HashMap<&str, HashMap<&str, &str>>) -> Result<Confi
             let service = maybe_unquote(servicestr)
                 .map_err(|e| format!("unable to read default_session.service: {}", e))?;
 
+            let allow_autologin = section
+                .get("allow_autologin")
+                .unwrap_or(&"false")
+                .parse()
+                .map_err(|e| format!("unable to read initial_session.allow_autologin: {}", e))?;
+
             Ok(ConfigSession {
                 command,
                 user,
                 service,
+                allow_autologin,
             })
         }
         None => Err("no default_session specified"),
@@ -189,6 +198,7 @@ fn parse_new_config(config: &HashMap<&str, HashMap<&str, &str>>) -> Result<Confi
                 command,
                 user,
                 service,
+                allow_autologin: false,
             })
         }
         None => None,
