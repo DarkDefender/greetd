@@ -131,6 +131,14 @@ fn worker(sock: &UnixDatagram) -> Result<(), Error> {
     }
     pam.acct_mgmt(PamFlag::NONE)?;
 
+    let pam_username = pam.get_user()?;
+
+    let user = nix::unistd::User::from_name(&pam_username)?.ok_or("unable to get user info")?;
+
+    // Drop the group privileges to target user. This needs to be done before we call pam.setcred.
+    let cusername = CString::new(user.name.clone())?;
+    initgroups(&cusername, user.gid)?;
+    setgid(user.gid)?;
     // Not the credentials you think.
     pam.setcred(PamFlag::ESTABLISH_CRED)?;
 
@@ -158,10 +166,6 @@ fn worker(sock: &UnixDatagram) -> Result<(), Error> {
         ParentToSessionChild::Cancel => return Err("cancelled".into()),
         msg => return Err(format!("expected Start or Cancel, got: {msg:?}").into()),
     };
-
-    let pam_username = pam.get_user()?;
-
-    let user = nix::unistd::User::from_name(&pam_username)?.ok_or("unable to get user info")?;
 
     // Make this process a session leader.
     setsid().map_err(|e| format!("unable to become session leader: {e}"))?;
@@ -224,8 +228,7 @@ fn worker(sock: &UnixDatagram) -> Result<(), Error> {
     // We are done with PAM, clear variables that the child will not need.
     _ = pam.putenv(&"XDG_SESSION_CLASS");
 
-    // Prepare some strings in C format that we'll need.
-    let cusername = CString::new(user.name)?;
+    // Prepare the command that we will run as the logged in user.
     let command = if source_profile {
         format!(
             "[ -f /etc/profile ] && . /etc/profile; [ -f $HOME/.profile ] && . $HOME/.profile; exec {}",
@@ -249,9 +252,6 @@ fn worker(sock: &UnixDatagram) -> Result<(), Error> {
             // accidentally using '?'. The process *must* exit from within
             // this match arm.
 
-            // Drop privileges to target user
-            initgroups(&cusername, user.gid).expect("unable to init groups");
-            setgid(user.gid).expect("unable to set GID");
             setuid(user.uid).expect("unable to set UID");
 
             // Set our parent death signal. setuid/setgid above resets the
